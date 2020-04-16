@@ -1,5 +1,5 @@
 /*************************************************************************/
-/*  rid.h                                                                */
+/*  CustomSSLSocketFactory.java                                          */
 /*************************************************************************/
 /*                       This file is part of:                           */
 /*                           GODOT ENGINE                                */
@@ -28,46 +28,43 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
 /*************************************************************************/
 
-#ifndef RID_H
-#define RID_H
+package org.godotengine.godot.plugin.payment.utils;
 
-#include "core/typedefs.h"
+import java.io.IOException;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import org.apache.http.conn.ssl.SSLSocketFactory;
 
-class RID_AllocBase;
+/**
+ *
+ * @author Luis Linietsky <luis.linietsky@gmail.com>
+ */
+public class CustomSSLSocketFactory extends SSLSocketFactory {
+	SSLContext sslContext = SSLContext.getInstance("TLS");
 
-class RID {
-	friend class RID_AllocBase;
-	uint64_t _id;
+	public CustomSSLSocketFactory(KeyStore truststore) throws NoSuchAlgorithmException, KeyManagementException, KeyStoreException, UnrecoverableKeyException {
+		super(truststore);
 
-public:
-	_FORCE_INLINE_ bool operator==(const RID &p_rid) const {
+		TrustManagerFactory tmf = TrustManagerFactory.getInstance("X509");
+		tmf.init(truststore);
 
-		return _id == p_rid._id;
+		sslContext.init(null, tmf.getTrustManagers(), null);
 	}
-	_FORCE_INLINE_ bool operator<(const RID &p_rid) const {
 
-		return _id < p_rid._id;
+	@Override
+	public Socket createSocket(Socket socket, String host, int port, boolean autoClose) throws IOException, UnknownHostException {
+		return sslContext.getSocketFactory().createSocket(socket, host, port, autoClose);
 	}
-	_FORCE_INLINE_ bool operator<=(const RID &p_rid) const {
 
-		return _id <= p_rid._id;
+	@Override
+	public Socket createSocket() throws IOException {
+		return sslContext.getSocketFactory().createSocket();
 	}
-	_FORCE_INLINE_ bool operator>(const RID &p_rid) const {
-
-		return _id > p_rid._id;
-	}
-	_FORCE_INLINE_ bool operator!=(const RID &p_rid) const {
-
-		return _id != p_rid._id;
-	}
-	_FORCE_INLINE_ bool is_valid() const { return _id != 0; }
-	_FORCE_INLINE_ bool is_null() const { return _id == 0; }
-
-	_FORCE_INLINE_ uint64_t get_id() const { return _id; }
-
-	_FORCE_INLINE_ RID() {
-		_id = 0;
-	}
-};
-
-#endif // RID_H
+}

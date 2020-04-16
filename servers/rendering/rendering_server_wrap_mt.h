@@ -264,6 +264,20 @@ public:
 	FUNC2(reflection_probe_set_cull_mask, RID, uint32_t)
 	FUNC2(reflection_probe_set_resolution, RID, int)
 
+	/* DECAL API */
+
+	FUNCRID(decal)
+
+	FUNC2(decal_set_extents, RID, const Vector3 &)
+	FUNC3(decal_set_texture, RID, DecalTexture, RID)
+	FUNC2(decal_set_emission_energy, RID, float)
+	FUNC2(decal_set_albedo_mix, RID, float)
+	FUNC2(decal_set_modulate, RID, const Color &)
+	FUNC2(decal_set_cull_mask, RID, uint32_t)
+	FUNC4(decal_set_distance_fade, RID, bool, float, float)
+	FUNC3(decal_set_fade, RID, float, float)
+	FUNC2(decal_set_normal_fade, RID, float)
+
 	/* BAKED LIGHT API */
 
 	FUNCRID(gi_probe)
@@ -403,6 +417,7 @@ public:
 	FUNC2(viewport_set_shadow_atlas_size, RID, int)
 	FUNC3(viewport_set_shadow_atlas_quadrant_subdivision, RID, int, int)
 	FUNC2(viewport_set_msaa, RID, ViewportMSAA)
+	FUNC2(viewport_set_screen_space_aa, RID, ViewportScreenSpaceAA)
 
 	//this passes directly to avoid stalling, but it's pretty dangerous, so don't call after freeing a viewport
 	virtual int viewport_get_render_info(RID p_viewport, ViewportRenderInfo p_info) {
@@ -475,7 +490,8 @@ public:
 	FUNC8(camera_effects_set_dof_blur, RID, bool, float, float, bool, float, float, float)
 	FUNC3(camera_effects_set_custom_exposure, RID, bool, float)
 
-	FUNC1(shadow_filter_set, ShadowFilter)
+	FUNC1(shadows_quality_set, ShadowQuality);
+	FUNC1(directional_shadow_quality_set, ShadowQuality);
 
 	FUNCRID(scenario)
 

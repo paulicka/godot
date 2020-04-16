@@ -78,7 +78,7 @@ protected:
 	};
 	virtual RenderBufferData *_create_render_buffer_data() = 0;
 
-	virtual void _render_scene(RID p_render_buffer, const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID *p_gi_probe_cull_result, int p_gi_probe_cull_count, RID p_environment, RID p_camera_effects, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, const Color &p_default_color) = 0;
+	virtual void _render_scene(RID p_render_buffer, const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID *p_gi_probe_cull_result, int p_gi_probe_cull_count, RID *p_decal_cull_result, int p_decal_cull_count, RID p_environment, RID p_camera_effects, RID p_shadow_atlas, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass, const Color &p_default_color) = 0;
 	virtual void _render_shadow(RID p_framebuffer, InstanceBase **p_cull_result, int p_cull_count, const CameraMatrix &p_projection, const Transform &p_transform, float p_zfar, float p_bias, float p_normal_bias, bool p_use_dp, bool use_dp_flip, bool p_use_pancake) = 0;
 	virtual void _render_material(const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID p_framebuffer, const Rect2i &p_region) = 0;
 
@@ -324,6 +324,16 @@ private:
 
 	mutable RID_Owner<ReflectionProbeInstance> reflection_probe_instance_owner;
 
+	/* REFLECTION PROBE INSTANCE */
+
+	struct DecalInstance {
+
+		RID decal;
+		Transform transform;
+	};
+
+	mutable RID_Owner<DecalInstance> decal_instance_owner;
+
 	/* GIPROBE INSTANCE */
 
 	struct GIProbeLight {
@@ -527,13 +537,24 @@ private:
 
 	bool _shadow_atlas_find_shadow(ShadowAtlas *shadow_atlas, int *p_in_quadrants, int p_quadrant_count, int p_current_subdiv, uint64_t p_tick, int &r_quadrant, int &r_shadow);
 
-	RS::ShadowFilter shadow_filter = RS::SHADOW_FILTER_NONE;
+	RS::ShadowQuality shadows_quality = RS::SHADOW_QUALITY_MAX; //So it always updates when first set
+	RS::ShadowQuality directional_shadow_quality = RS::SHADOW_QUALITY_MAX;
+	float shadows_quality_radius = 1.0;
+	float directional_shadow_quality_radius = 1.0;
+
+	float *directional_penumbra_shadow_kernel;
+	float *directional_soft_shadow_kernel;
+	float *penumbra_shadow_kernel;
+	float *soft_shadow_kernel;
+	int directional_penumbra_shadow_samples = 0;
+	int directional_soft_shadow_samples = 0;
+	int penumbra_shadow_samples = 0;
+	int soft_shadow_samples = 0;
 
 	/* DIRECTIONAL SHADOW */
 
 	struct DirectionalShadow {
 		RID depth;
-		RID fb; //for copying
 
 		int light_count = 0;
 		int size = 0;
@@ -717,6 +738,8 @@ private:
 		RenderBufferData *data = nullptr;
 		int width = 0, height = 0;
 		RS::ViewportMSAA msaa = RS::VIEWPORT_MSAA_DISABLED;
+		RS::ViewportScreenSpaceAA screen_space_aa = RS::VIEWPORT_SCREEN_SPACE_AA_DISABLED;
+
 		RID render_target;
 
 		uint64_t auto_exposure_version = 1;
@@ -730,7 +753,6 @@ private:
 
 			struct Mipmap {
 				RID texture;
-				RID framebuffer;
 				int width;
 				int height;
 			};
@@ -1091,6 +1113,19 @@ public:
 		return rpi->atlas_index;
 	}
 
+	virtual RID decal_instance_create(RID p_decal);
+	virtual void decal_instance_set_transform(RID p_decal, const Transform &p_transform);
+
+	_FORCE_INLINE_ RID decal_instance_get_base(RID p_decal) const {
+		DecalInstance *decal = decal_instance_owner.getornull(p_decal);
+		return decal->decal;
+	}
+
+	_FORCE_INLINE_ Transform decal_instance_get_transform(RID p_decal) const {
+		DecalInstance *decal = decal_instance_owner.getornull(p_decal);
+		return decal->transform;
+	}
+
 	RID gi_probe_instance_create(RID p_base);
 	void gi_probe_instance_set_transform_to_data(RID p_probe, const Transform &p_xform);
 	bool gi_probe_needs_update(RID p_probe) const;
@@ -1151,12 +1186,12 @@ public:
 	GIProbeQuality gi_probe_get_quality() const;
 
 	RID render_buffers_create();
-	void render_buffers_configure(RID p_render_buffers, RID p_render_target, int p_width, int p_height, RS::ViewportMSAA p_msaa);
+	void render_buffers_configure(RID p_render_buffers, RID p_render_target, int p_width, int p_height, RS::ViewportMSAA p_msaa, RS::ViewportScreenSpaceAA p_screen_space_aa);
 
 	RID render_buffers_get_ao_texture(RID p_render_buffers);
 	RID render_buffers_get_back_buffer_texture(RID p_render_buffers);
 
-	void render_scene(RID p_render_buffers, const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID *p_gi_probe_cull_result, int p_gi_probe_cull_count, RID p_environment, RID p_shadow_atlas, RID p_camera_effects, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
+	void render_scene(RID p_render_buffers, const Transform &p_cam_transform, const CameraMatrix &p_cam_projection, bool p_cam_ortogonal, InstanceBase **p_cull_result, int p_cull_count, RID *p_light_cull_result, int p_light_cull_count, RID *p_reflection_probe_cull_result, int p_reflection_probe_cull_count, RID *p_gi_probe_cull_result, int p_gi_probe_cull_count, RID *p_decal_cull_result, int p_decal_cull_count, RID p_environment, RID p_shadow_atlas, RID p_camera_effects, RID p_reflection_atlas, RID p_reflection_probe, int p_reflection_probe_pass);
 
 	void render_shadow(RID p_light, RID p_shadow_atlas, int p_pass, InstanceBase **p_cull_result, int p_cull_count);
 
@@ -1177,8 +1212,22 @@ public:
 	RS::SubSurfaceScatteringQuality sub_surface_scattering_get_quality() const;
 	virtual void sub_surface_scattering_set_scale(float p_scale, float p_depth_scale);
 
-	virtual void shadow_filter_set(RS::ShadowFilter p_filter);
-	_FORCE_INLINE_ RS::ShadowFilter shadow_filter_get() const { return shadow_filter; }
+	virtual void shadows_quality_set(RS::ShadowQuality p_quality);
+	virtual void directional_shadow_quality_set(RS::ShadowQuality p_quality);
+	_FORCE_INLINE_ RS::ShadowQuality shadows_quality_get() const { return shadows_quality; }
+	_FORCE_INLINE_ RS::ShadowQuality directional_shadow_quality_get() const { return directional_shadow_quality; }
+	_FORCE_INLINE_ float shadows_quality_radius_get() const { return shadows_quality_radius; }
+	_FORCE_INLINE_ float directional_shadow_quality_radius_get() const { return directional_shadow_quality_radius; }
+
+	_FORCE_INLINE_ float *directional_penumbra_shadow_kernel_get() { return directional_penumbra_shadow_kernel; }
+	_FORCE_INLINE_ float *directional_soft_shadow_kernel_get() { return directional_soft_shadow_kernel; }
+	_FORCE_INLINE_ float *penumbra_shadow_kernel_get() { return penumbra_shadow_kernel; }
+	_FORCE_INLINE_ float *soft_shadow_kernel_get() { return soft_shadow_kernel; }
+
+	_FORCE_INLINE_ int directional_penumbra_shadow_samples_get() const { return directional_penumbra_shadow_samples; }
+	_FORCE_INLINE_ int directional_soft_shadow_samples_get() const { return directional_soft_shadow_samples; }
+	_FORCE_INLINE_ int penumbra_shadow_samples_get() const { return penumbra_shadow_samples; }
+	_FORCE_INLINE_ int soft_shadow_samples_get() const { return soft_shadow_samples; }
 
 	int get_roughness_layers() const;
 	bool is_using_radiance_cubemap_array() const;
